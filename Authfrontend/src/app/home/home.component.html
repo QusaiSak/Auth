@@ -8,8 +8,17 @@
         </div>
       </div>
       <div class="flex items-center space-x-4">
-        <a [routerLink]="['/login']" class="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">Login</a>
-        <a [routerLink]="['/register']" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">Register</a>
+        <!-- Show these buttons when user is not logged in -->
+        <ng-container *ngIf="!isLoggedIn">
+          <a [routerLink]="['/login']" class="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">Login</a>
+          <a [routerLink]="['/register']" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">Register</a>
+        </ng-container>
+
+        <!-- Show username and logout button when user is logged in -->
+        <ng-container *ngIf="isLoggedIn">
+          <span class="text-gray-700 px-3 py-2 text-sm font-medium">Welcome, {{ username }}</span>
+          <button (click)="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">Logout</button>
+        </ng-container>
       </div>
     </div>
   </div>

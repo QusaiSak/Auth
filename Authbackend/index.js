@@ -22,14 +22,30 @@ mongoose.connect(process.env.MONGO_URI,{
 });
 
 const app = express();
-app.use(helmet()); 
-app.use(express.json({ limit: '10kb' }));
+
+// Apply rate limiter before other middleware
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 100 
+});
+app.use('/user', limiter);
+
+// Order of middleware is important
+app.use(helmet());
+app.use(express.json({ limit: '10kb' })); // Body parser
 app.use(cors({
     origin: 'http://localhost:4200', 
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
-app.use(cors());
+
+// Add this after your CORS middleware
+app.use((req, res, next) => {
+    console.log('Request Body:', req.body);
+    next();
+});
+
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -130,6 +146,25 @@ app.post('/user/login', async (req, res) => {
     }
 });
 
+app.post('/user/forgot-password', async (req, res) => {
+    const { email, newPassword, confirmPassword } = req.body;
+    try{
+        if(newPassword !== confirmPassword){
+            return res.status(400).json({ message: "Passwords do not match" });
+        }
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password = hashedPassword;
+        await user.save();
+        res.json({ message: "Password updated successfully" });
+    }catch(error){
+        res.status(500).json({ message: "Error updating password", error: error.message });
+    }
+});
+
 // Protected route example
 app.get('/protected', verifyToken, (req, res) => {
     res.json({ 
@@ -138,12 +173,40 @@ app.get('/protected', verifyToken, (req, res) => {
     });
 });
 
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 100 
+// Protected route for user profile
+app.get('/user/profile', verifyToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.userId).select('-password');
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching profile", error: error.message });
+    }
 });
 
-app.use('/user', limiter);
+// Protected route for updating user profile
+app.put('/user/profile', verifyToken, async (req, res) => {
+    try {
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user.userId,
+            { $set: req.body },
+            { new: true }
+        ).select('-password');
+        res.json(updatedUser);
+    } catch (error) {
+        res.status(500).json({ message: "Error updating profile", error: error.message });
+    }
+});
+
+// Protected route for deleting account
+app.delete('/user/account', verifyToken, async (req, res) => {
+    try {
+        await User.findByIdAndDelete(req.user.userId);
+        res.json({ message: "Account deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ message: "Error deleting account", error: error.message });
+    }
+});
+
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({
