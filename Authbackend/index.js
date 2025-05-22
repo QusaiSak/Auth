@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const bcrypt = require('bcrypt');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 dotenv.config();
 
@@ -20,6 +22,12 @@ mongoose.connect(process.env.MONGO_URI,{
 });
 
 const app = express();
+app.use(helmet()); 
+app.use(express.json({ limit: '10kb' }));
+app.use(cors({
+    origin: 'http://localhost:4200', 
+    credentials: true
+}));
 app.use(express.json());
 app.use(cors());
 
@@ -130,6 +138,19 @@ app.get('/protected', verifyToken, (req, res) => {
     });
 });
 
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 100 
+});
+
+app.use('/user', limiter);
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? err.message : {}
+    });
+});
 app.listen(PORT, ()=>{
     console.log(`Server is running on port ${PORT}`);
 });
